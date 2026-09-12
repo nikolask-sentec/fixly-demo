@@ -51,12 +51,13 @@ const initial = () => ({
       date: "Tomorrow, 09:00",
       issue: "The living room AC is not cooling well.",
       quote: 0,
+      area: "Jimbaran",
     },
   ],
   application: "Pending review",
 });
 
-createApp({
+const appOptions = {
   data() {
     return {
       ...initial(),
@@ -74,6 +75,8 @@ createApp({
       newGroup: "",
       registrationStep: 1,
       sampleId: false,
+      profiles: {},
+      accessInstructions: "",
       bank: "BCA",
       bankNumber: "000123456789",
       fullName: "Andi — demo partner",
@@ -85,7 +88,14 @@ createApp({
       reason: "",
       reviewChecks: [false, false, false],
       reviewError: "",
-      serviceAreas: ["Jimbaran", "Benoa", "Kutuh", "Pecatu", "Ungasan", "Tanjung Benoa"],
+      serviceAreas: [
+        "Jimbaran",
+        "Benoa",
+        "Kutuh",
+        "Pecatu",
+        "Ungasan",
+        "Tanjung Benoa",
+      ],
     };
   },
   mounted() {
@@ -144,6 +154,28 @@ createApp({
       this.toast = message;
     },
     switchRole(role) {
+      const fields = [
+        "fullName",
+        "email",
+        "phone",
+        "street",
+        "pin",
+        "accessInstructions",
+        "bank",
+        "bankNumber",
+        "sampleId",
+      ];
+      if (this.role !== "Admin")
+        this.profiles[this.role] = Object.fromEntries(
+          fields.map((key) => [key, JSON.parse(JSON.stringify(this[key]))]),
+        );
+      const defaults = appOptions.data();
+      Object.assign(
+        this,
+        this.profiles[role === "Admin" ? "Handyman" : role] ||
+          Object.fromEntries(fields.map((key) => [key, defaults[key]])),
+      );
+      this.registrationStep = 1;
       this.role = role;
       this.page = "Overview";
       this.selected = null;
@@ -151,15 +183,29 @@ createApp({
       this.toast = "";
     },
     reset() {
-      Object.assign(this, initial());
+      const language = this.language;
+      Object.assign(this, appOptions.data(), { language });
       this.registrationStep = 1;
       this.sampleId = false;
       this.notify("Demo reset. All changes stay in this browser session.");
     },
     book() {
+      if (
+        !this.selected ||
+        !this.selected.published ||
+        !this.selected.areas.includes(this.area) ||
+        !Number.isInteger(this.quantity) ||
+        this.quantity < 1 ||
+        this.quantity > 20 ||
+        !this.issue.trim() ||
+        !this.date ||
+        new Date(this.date).getTime() <= Date.now()
+      )
+        return;
       this.jobs.unshift({
         id: "FX-" + String(Date.now()).slice(-6),
         name: this.selected.name,
+        area: this.area,
         price: this.selected.price,
         quantity: this.quantity,
         date: this.date.replace("T", ", "),
@@ -170,6 +216,23 @@ createApp({
       this.selected = null;
       this.page = "My bookings";
       this.notify("Demo booking created. Switch to Admin to assign it.");
+    },
+    addGroup() {
+      const name = this.newGroup.trim();
+      if (
+        name &&
+        !this.groups.some((group) => group.toLowerCase() === name.toLowerCase())
+      )
+        this.groups.push(name);
+      this.newGroup = "";
+    },
+    validateVisit(event) {
+      const input = event.target;
+      input.setCustomValidity(
+        new Date(input.value).getTime() <= Date.now()
+          ? this.t("Choose a future visit time.")
+          : "",
+      );
     },
     editService(service) {
       this.editor = service
@@ -230,6 +293,8 @@ createApp({
         return;
       }
       if (this.role === "Handyman") {
+        this.reason = "";
+        this.reviewError = "";
         this.application = "Pending review";
         this.reviewChecks = [false, false, false];
         this.notify(
@@ -258,16 +323,17 @@ createApp({
 
   <template v-if="role==='Handyman'&&page==='Overview'"><section class="hero partner-hero"><div><span class="tag">{{ t("YOUR SKILLS. YOUR NEXT OPPORTUNITY.") }}</span><h2>{{ t(approved?'Ready to make someone’s day?':'A quick review, then you’re ready.') }}</h2><p>{{ t(approved?'Your assigned jobs and next steps are all here.':'Your application needs manual approval before you can receive household service jobs.') }}</p><button class="primary" @click="page=approved?'My jobs':'Registration'">{{ t(approved?'View my jobs ↗':'Preview registration ↗') }}</button></div><div class="partner-mark" aria-hidden="true">✦</div></section><div class="stats"><div class="card"><small>{{ t("Application") }}</small><strong class="status-text">{{ t(application) }}</strong><span>{{ t("Independent partner") }}</span></div><div class="card"><small>{{ t("Assigned jobs") }}</small><strong>{{ t(approved?jobs.filter(j=>!['Requested','Cancelled','Completed'].includes(j.status)).length:0) }}</strong><span>{{ t("Verified access required") }}</span></div><div class="card"><small>{{ t("Completed") }}</small><strong>{{ t(jobs.filter(j=>j.status==='Completed').length) }}</strong><span>{{ t("In this demo session") }}</span></div></div></template>
 
-  <template v-if="page==='My bookings'||page==='Jobs'||page==='My jobs'||(role==='Admin'&&page==='Overview')"><div v-if="role==='Handyman'&&!approved" class="card empty"><span class="service-icon">◎</span><h2>{{ t("Your application is") }} {{ t(application.toLowerCase()) }}.</h2><p>{{ t(reason||'An administrator must approve your details before you can receive jobs.') }}</p><p class="hint">{{ t("For this walkthrough, switch to Admin → Partner approvals.") }}</p></div><template v-else><article class="card job" v-for="j in jobs.filter(j=>role!=='Handyman'||j.status!=='Requested')" :key="j.id"><div class="job-header"><span class="job-id">{{ t(j.id) }}</span><span class="pill">{{ t(j.status) }}</span></div><h3>{{ t(j.name) }}</h3><p>{{ t(j.issue) }}</p><div class="job-details"><span>◷ {{ t(j.date) }}</span><span>{{ t("⌖ Sample home · Jimbaran") }}</span><span>{{ t(money(j.price)) }} × {{ t(j.quantity) }}</span></div><p v-if="j.quote"><b>{{ t("Total work quote:") }} {{ t(money(j.quote)) }}</b></p><div class="job-actions"><button v-if="role==='Admin'&&j.status==='Requested'" class="primary" :disabled="!approved" @click="move(j,'Assigned')">{{ t("Assign to Andi") }}</button><small v-if="role==='Admin'&&!approved">{{ t("Approve the sample partner first.") }}</small><template v-if="role==='Handyman'"><button v-if="j.status==='Assigned'" class="primary" @click="move(j,'On the way')">{{ t("Start travelling") }}</button><button v-if="j.status==='On the way'" class="primary" @click="move(j,'Diagnosing')">{{ t("I’ve arrived") }}</button><form v-if="j.status==='Diagnosing'" @submit.prevent="move(j,'Quote ready')"><label>{{ t("Total quote (IDR)") }}<input type="number" min="1" max="1000000000" v-model.number="quoteInput" required></label><button class="primary">{{ t("Send quote") }}</button></form><button v-if="j.status==='In progress'" class="primary" @click="move(j,'Completed')">{{ t("Complete work") }}</button></template><template v-if="role==='Customer'"><button v-if="j.status==='Quote ready'" class="primary" @click="move(j,'In progress')">{{ t("Approve quote") }}</button><button v-if="['Requested','Assigned'].includes(j.status)" class="secondary" @click="move(j,'Cancelled')">{{ t("Cancel request") }}</button></template><small v-if="j.status==='Completed'">{{ t("Payment integration is planned; no payment is collected.") }}</small></div></article><p v-if="!jobs.length" class="card empty">{{ t("No bookings yet. Explore the services to create a sample request.") }}</p></template></template>
+  <template v-if="page==='My bookings'||page==='Jobs'||page==='My jobs'||(role==='Admin'&&page==='Overview')"><div v-if="role==='Handyman'&&!approved" class="card empty"><span class="service-icon">◎</span><h2>{{ t("Your application is") }} {{ t(application.toLowerCase()) }}.</h2><p>{{ t(reason||'An administrator must approve your details before you can receive jobs.') }}</p><p class="hint">{{ t("For this walkthrough, switch to Admin → Partner approvals.") }}</p></div><template v-else><article class="card job" v-for="j in jobs.filter(j=>role!=='Handyman'||j.status!=='Requested')" :key="j.id"><div class="job-header"><span class="job-id">{{ t(j.id) }}</span><span class="pill">{{ t(j.status) }}</span></div><h3>{{ t(j.name) }}</h3><p>{{ t(j.issue) }}</p><div class="job-details"><span>◷ {{ t(j.date) }}</span><span>⌖ {{ t(j.area) }}</span><span>{{ t(money(j.price)) }} × {{ t(j.quantity) }}</span></div><p v-if="j.quote"><b>{{ t("Total work quote:") }} {{ t(money(j.quote)) }}</b></p><div class="job-actions"><button v-if="role==='Admin'&&j.status==='Requested'" class="primary" :disabled="!approved" @click="move(j,'Assigned')">{{ t("Assign to Andi") }}</button><small v-if="role==='Admin'&&!approved">{{ t("Approve the sample partner first.") }}</small><template v-if="role==='Handyman'"><button v-if="j.status==='Assigned'" class="primary" @click="move(j,'On the way')">{{ t("Start travelling") }}</button><button v-if="j.status==='On the way'" class="primary" @click="move(j,'Diagnosing')">{{ t("I’ve arrived") }}</button><form v-if="j.status==='Diagnosing'" @submit.prevent="move(j,'Quote ready')"><label>{{ t("Total quote (IDR)") }}<input type="number" min="1" max="1000000000" v-model.number="quoteInput" required></label><button class="primary">{{ t("Send quote") }}</button></form><button v-if="j.status==='In progress'" class="primary" @click="move(j,'Completed')">{{ t("Complete work") }}</button></template><template v-if="role==='Customer'"><button v-if="j.status==='Quote ready'" class="primary" @click="move(j,'In progress')">{{ t("Approve quote") }}</button><button v-if="['Requested','Assigned'].includes(j.status)" class="secondary" @click="move(j,'Cancelled')">{{ t("Cancel request") }}</button></template><small v-if="j.status==='Completed'">{{ t("Payment integration is planned; no payment is collected.") }}</small></div></article><p v-if="!jobs.length" class="card empty">{{ t("No bookings yet. Explore the services to create a sample request.") }}</p></template></template>
 
-  <template v-if="role==='Admin'&&page==='Service catalog'"><div class="catalog-toolbar"><form @submit.prevent="groups.push(newGroup.trim());newGroup=''" class="inline"><input v-model="newGroup" :placeholder="t(&quot;New job group&quot;)" :aria-label="t(&quot;New job group&quot;)" required maxlength="60"><button class="secondary">{{ t("Add group") }}</button></form><button class="primary" @click="editService(null)">{{ t("+ Create job item") }}</button></div><div class="card table-wrap"><table><thead><tr><th>{{ t("Service / job group") }}</th><th>{{ t("Unit price") }}</th><th>{{ t("Availability by area") }}</th><th>{{ t("Status") }}</th><th>{{ t("Actions") }}</th></tr></thead><tbody><tr v-for="s in services"><td><b>{{ t(s.name) }}</b><small>{{ t(s.group) }}</small></td><td>{{ t(money(s.price)) }}<small>/ {{ t(s.unit) }}</small></td><td><label v-for="a in serviceAreas" class="check"><input type="checkbox" :value="a" v-model="s.areas">{{ t(a) }}</label></td><td><span class="pill">{{ t(s.published?'Published':'Draft') }}</span></td><td><button class="text-button" @click="editService(s)">{{ t("Edit") }}</button><button class="text-button" :disabled="!s.areas.length" @click="s.published=!s.published">{{ t(s.published?'Unpublish':'Publish') }}</button></td></tr></tbody></table></div><p class="hint">{{ t("Area switches immediately change the customer demo. Editing a demo item saves it as a draft until you publish it again. Existing bookings keep their original unit price.") }}</p></template>
+  <template v-if="role==='Admin'&&page==='Service catalog'"><div class="catalog-toolbar"><form @submit.prevent="addGroup" class="inline"><input v-model="newGroup" :placeholder="t(&quot;New job group&quot;)" :aria-label="t(&quot;New job group&quot;)" required maxlength="60"><button class="secondary">{{ t("Add group") }}</button></form><button class="primary" @click="editService(null)">{{ t("+ Create job item") }}</button></div><div class="card table-wrap"><table><thead><tr><th>{{ t("Service / job group") }}</th><th>{{ t("Unit price") }}</th><th>{{ t("Availability by area") }}</th><th>{{ t("Status") }}</th><th>{{ t("Actions") }}</th></tr></thead><tbody><tr v-for="s in services"><td><b>{{ t(s.name) }}</b><small>{{ t(s.group) }}</small></td><td>{{ t(money(s.price)) }}<small>/ {{ t(s.unit) }}</small></td><td><label v-for="a in serviceAreas" class="check"><input type="checkbox" :value="a" v-model="s.areas">{{ t(a) }}</label></td><td><span class="pill">{{ t(s.published?'Published':'Draft') }}</span></td><td><button class="text-button" @click="editService(s)">{{ t("Edit") }}</button><button class="text-button" :disabled="!s.areas.length" @click="s.published=!s.published">{{ t(s.published?'Unpublish':'Publish') }}</button></td></tr></tbody></table></div><p class="hint">{{ t("Area switches immediately change the customer demo. Editing a demo item saves it as a draft until you publish it again. Existing bookings keep their original unit price.") }}</p></template>
 
   <template v-if="role==='Admin'&&page==='Partner approvals'"><div class="review-grid"><section class="card"><div class="job-header"><span class="eyebrow">{{ t("PARTNER APPLICATION") }}</span><span class="pill">{{ t(application) }}</span></div><h2>{{ t(fullName) }}</h2><p>{{ t("Independent handyman · Jimbaran") }}</p><dl><dt>{{ t("Email") }}</dt><dd>{{ t(email) }}</dd><dt>{{ t("Phone") }}</dt><dd>{{ t(phone) }}</dd><dt>{{ t("Home base") }}</dt><dd>{{ t(street) }}</dd><dt>{{ t("Bank") }}</dt><dd>{{ t(bank) }} · {{ t(bankNumber) }}</dd></dl><div class="sample-id"><b>{{ t("SAMPLE ID — NOT VALID") }}</b><div class="id-content"><span>◎</span><div>{{ t("DEMO PARTNER") }}<br><small>{{ t("Illustration for design review only") }}<br>{{ t("No actual identity document") }}</small></div></div></div></section><section class="card"><h2>{{ t("Manual verification") }}</h2><p>{{ t("Confirm the required details before approving a partner.") }}</p><label class="check review-check" v-for="(label,i) in ['ID image is readable and matches the applicant','Email and phone details have been checked','Bank details have been checked']"><input type="checkbox" v-model="reviewChecks[i]">{{ t(label) }}</label><label>{{ t("Review notes") }}<textarea v-model="reason" :placeholder="t(&quot;Explain any changes needed&quot;)" maxlength="500"></textarea></label><p v-if="reviewError" class="error" role="alert">{{ t(reviewError) }}</p><div class="stack" v-if="application==='Pending review'"><button class="primary" @click="review('Approved')">{{ t("Approve partner") }}</button><button class="secondary" @click="review('Changes requested')">{{ t("Request changes") }}</button><button class="text-button" @click="review('Rejected')">{{ t("Reject application") }}</button></div><p v-else class="notice">{{ t("Review saved:") }} {{ t(application) }}.</p></section></div></template>
 
-  <template v-if="page==='Registration'"><div class="registration-layout"><section><span class="eyebrow">{{ t(role==='Handyman'?'BECOME AN INDEPENDENT PARTNER':'WELCOME HOME') }}</span><h2>{{ t(role==='Handyman'?'Good work starts here.':'Let’s get your home ready.') }}</h2><p>{{ t("Try the registration flow using the sample details provided.") }}</p><ol class="steps"><li :class="{active:registrationStep===1}">{{ t("Contact details") }}</li><li :class="{active:registrationStep===2}">{{ t(role==='Handyman'?'Identity & bank account':'Home location') }}</li><li :class="{active:registrationStep===3}">{{ t("Review & submit") }}</li></ol></section><form class="card" @submit.prevent="submitRegistration"><h2>{{ t(['Your details',role==='Handyman'?'Identity & bank account':'Pinpoint your entrance','Looks good?'][registrationStep-1]) }}</h2><template v-if="registrationStep===1"><button type="button" class="secondary full" @click="notify('Google sign-in preview only. No Google account is connected.')">{{ t("G   Continue with Google") }}</button><label>{{ t("Full name") }}<input v-model="fullName" required maxlength="100"></label><label>{{ t("Email") }}<input v-model="email" type="email" required></label><label>{{ t("Phone number") }}<input v-model="phone" type="tel" required></label><label>{{ t("Home address") }}<input v-model="street" required></label></template><template v-if="registrationStep===2&&role==='Handyman'"><div class="upload-placeholder"><span>▧</span><h3>{{ t("ID card photo") }}</h3><p>{{ t("Use a synthetic sample for this walkthrough.") }}</p><button type="button" class="secondary" @click="sampleId=true">{{ t(sampleId?'✓ Sample ID attached':'Attach sample ID') }}</button></div><label>{{ t("Bank name") }}<select v-model="bank"><option>BCA</option><option>Mandiri</option><option>BRI</option><option>BNI</option></select></label><label>{{ t("Bank account number") }}<input v-model="bankNumber" inputmode="numeric" pattern="[0-9]+" required></label><label class="check"><input type="checkbox" required>{{ t("I am an independent partner, not an employee.") }}</label></template><template v-if="registrationStep===2&&role!=='Handyman'"><label>{{ t("Address") }}<input v-model="street" required></label><div class="mock-map" role="button" tabindex="0" :aria-label="t(&quot;Illustrative location picker. Click to place pin or press Enter for center.&quot;)" @click="pickPin" @keydown.enter.prevent="pin={x:50,y:50}"><span class="map-street one"></span><span class="map-street two"></span><span class="map-street three"></span><b :style="{left:pin.x+'%',top:pin.y+'%'}">⌖</b><small>{{ t("ILLUSTRATIVE MAP · NOT GOOGLE MAPS") }}</small></div><p class="hint">{{ t("Click to move the sample pin. Live Google Maps will be connected in the full app.") }}</p><label>{{ t("Landmark / access instructions") }}<textarea :placeholder="t(&quot;Near the corner, blue gate…&quot;)"></textarea></label></template><template v-if="registrationStep===3"><p><b>{{ t(fullName) }}</b><br>{{ t(email) }}<br>{{ t(phone) }}<br>{{ t(street) }}</p><p v-if="role==='Handyman'">{{ t(bank) }} · {{ t(bankNumber) }}<br>{{ t(sampleId?'Sample ID attached':'No sample ID attached') }}</p><p class="hint">{{ t(role==='Handyman'?'An administrator must manually approve the application before you can receive jobs.':'Payment setup is deferred. No card details are collected.') }}</p></template><div class="actions"><button type="button" v-if="registrationStep>1" class="secondary" @click="registrationStep--">{{ t("Back") }}</button><button class="primary" :disabled="role==='Handyman'&&registrationStep===2&&!sampleId">{{ t(registrationStep===3?'Submit demo':'Continue →') }}</button></div></form></div></template>
+  <template v-if="page==='Registration'"><div class="registration-layout"><section><span class="eyebrow">{{ t(role==='Handyman'?'BECOME AN INDEPENDENT PARTNER':'WELCOME HOME') }}</span><h2>{{ t(role==='Handyman'?'Good work starts here.':'Let’s get your home ready.') }}</h2><p>{{ t("Try the registration flow using the sample details provided.") }}</p><ol class="steps"><li :class="{active:registrationStep===1}">{{ t("Contact details") }}</li><li :class="{active:registrationStep===2}">{{ t(role==='Handyman'?'Identity & bank account':'Home location') }}</li><li :class="{active:registrationStep===3}">{{ t("Review & submit") }}</li></ol></section><form class="card" @submit.prevent="submitRegistration"><h2>{{ t(['Your details',role==='Handyman'?'Identity & bank account':'Pinpoint your entrance','Looks good?'][registrationStep-1]) }}</h2><template v-if="registrationStep===1"><button type="button" class="secondary full" @click="notify('Google sign-in preview only. No Google account is connected.')">{{ t("G   Continue with Google") }}</button><label>{{ t("Full name") }}<input v-model="fullName" required maxlength="100"></label><label>{{ t("Email") }}<input v-model="email" type="email" required></label><label>{{ t("Phone number") }}<input v-model="phone" type="tel" required></label><label>{{ t("Home address") }}<input v-model="street" required></label></template><template v-if="registrationStep===2&&role==='Handyman'"><div class="upload-placeholder"><span>▧</span><h3>{{ t("ID card photo") }}</h3><p>{{ t("Use a synthetic sample for this walkthrough.") }}</p><button type="button" class="secondary" @click="sampleId=true">{{ t(sampleId?'✓ Sample ID attached':'Attach sample ID') }}</button></div><label>{{ t("Bank name") }}<select v-model="bank"><option>BCA</option><option>Mandiri</option><option>BRI</option><option>BNI</option></select></label><label>{{ t("Bank account number") }}<input v-model="bankNumber" inputmode="numeric" pattern="[0-9]+" required></label><label class="check"><input type="checkbox" required>{{ t("I am an independent partner, not an employee.") }}</label></template><template v-if="registrationStep===2&&role!=='Handyman'"><label>{{ t("Address") }}<input v-model="street" required></label><div class="mock-map" role="button" tabindex="0" :aria-label="t(&quot;Illustrative location picker. Click to place pin or press Enter for center.&quot;)" @click="pickPin" @keydown.enter.prevent="pin={x:50,y:50}"><span class="map-street one"></span><span class="map-street two"></span><span class="map-street three"></span><b :style="{left:pin.x+'%',top:pin.y+'%'}">⌖</b><small>{{ t("ILLUSTRATIVE MAP · NOT GOOGLE MAPS") }}</small></div><p class="hint">{{ t("Click to move the sample pin. Live Google Maps will be connected in the full app.") }}</p><label>{{ t("Landmark / access instructions") }}<textarea v-model="accessInstructions" :placeholder="t(&quot;Near the corner, blue gate…&quot;)"></textarea></label></template><template v-if="registrationStep===3"><p><b>{{ t(fullName) }}</b><br>{{ t(email) }}<br>{{ t(phone) }}<br>{{ t(street) }}</p><p v-if="role==='Handyman'">{{ t(bank) }} · {{ t(bankNumber) }}<br>{{ t(sampleId?'Sample ID attached':'No sample ID attached') }}</p><p class="hint">{{ t(role==='Handyman'?'An administrator must manually approve the application before you can receive jobs.':'Payment setup is deferred. No card details are collected.') }}</p></template><div class="actions"><button type="button" v-if="registrationStep>1" class="secondary" @click="registrationStep--">{{ t("Back") }}</button><button class="primary" :disabled="role==='Handyman'&&registrationStep===2&&!sampleId">{{ t(registrationStep===3?'Submit demo':'Continue →') }}</button></div></form></div></template>
   <footer>{{ t("Designed for better days at home.") }}<span>Fixly · Indonesia</span></footer></main></div>
 
-  <div v-if="selected" class="modal-backdrop" @click.self="selected=null"><section class="modal card" role="dialog" aria-modal="true" aria-labelledby="booking-title"><button class="close" :aria-label="t(&quot;Close booking&quot;)" @click="selected=null">×</button><span class="eyebrow">{{ t("A LITTLE HELP IS ON THE WAY") }}</span><h2 id="booking-title">{{ t(selected.name) }}</h2><p>{{ t(selected.description) }}</p><form @submit.prevent="book"><label>{{ t("Quantity") }}<input v-model.number="quantity" type="number" min="1" max="20" required></label><label>{{ t("Preferred visit") }}<input v-model="date" type="datetime-local" required></label><label>{{ t("Tell us what’s happening") }}<textarea v-model="issue" required maxlength="500"></textarea></label><div class="estimate"><span>{{ t("Service estimate") }}</span><b>{{ t(money(selected.price*quantity)) }}</b></div><p class="hint">{{ t("Additional work is quoted separately and needs your approval.") }}</p><button class="primary full">{{ t("Create demo booking") }}</button></form></section></div>
+  <div v-if="selected" class="modal-backdrop" @click.self="selected=null"><section class="modal card" role="dialog" aria-modal="true" aria-labelledby="booking-title"><button class="close" :aria-label="t(&quot;Close booking&quot;)" @click="selected=null">×</button><span class="eyebrow">{{ t("A LITTLE HELP IS ON THE WAY") }}</span><h2 id="booking-title">{{ t(selected.name) }}</h2><p>{{ t(selected.description) }}</p><form @submit.prevent="book"><label>{{ t("Quantity") }}<input v-model.number="quantity" type="number" min="1" max="20" required></label><label>{{ t("Preferred visit") }}<input v-model="date" @input="validateVisit" type="datetime-local" required></label><label>{{ t("Tell us what’s happening") }}<textarea v-model="issue" required maxlength="500"></textarea></label><div class="estimate"><span>{{ t("Service estimate") }}</span><b>{{ t(money(selected.price*quantity)) }}</b></div><p class="hint">{{ t("Additional work is quoted separately and needs your approval.") }}</p><button class="primary full">{{ t("Create demo booking") }}</button></form></section></div>
   <div v-if="editor" class="modal-backdrop" @click.self="editor=null"><section class="modal card" role="dialog" aria-modal="true" aria-labelledby="editor-title"><button class="close" :aria-label="t(&quot;Close editor&quot;)" @click="editor=null">×</button><h2 id="editor-title">{{ t("Job item") }}</h2><form @submit.prevent="saveService"><label>{{ t("Job name") }}<input v-model="editor.name" required maxlength="100"></label><label>{{ t("Job group") }}<select v-model="editor.group"><option v-for="g in groups" :value="g">{{ t(g) }}</option></select></label><label>{{ t("Description") }}<textarea v-model="editor.description" required maxlength="500"></textarea></label><div class="two-columns"><label>{{ t("Unit price (IDR)") }}<input type="number" min="1" max="1000000000" required v-model.number="editor.price"></label><label>{{ t("Billing unit") }}<input v-model="editor.unit" required maxlength="40"></label></div><label v-for="a in serviceAreas" class="check"><input type="checkbox" v-model="editor.areas" :value="a">{{ t(a) }}</label><button class="primary full" :disabled="!editor.areas.length">{{ t("Save draft") }}</button></form></section></div>
   `,
-}).mount("#app");
+};
+createApp(appOptions).mount("#app");

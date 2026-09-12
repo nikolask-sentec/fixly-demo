@@ -1,6 +1,7 @@
 // English keys keep the demo's internal workflow values stable.
 // Columns: Bahasa Indonesia | Simplified Chinese | Russian.
 const rows = `
+Choose a future visit time.|Pilih waktu kunjungan mendatang.|请选择未来的上门时间。|Выберите будущее время визита.
 Language|Bahasa|语言|Язык
 Customer|Pelanggan|客户|Клиент
 Admin|Admin|管理员|Администратор
