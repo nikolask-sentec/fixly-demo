@@ -23,3 +23,7 @@ Vue 3 is bundled locally in vue.js; its MIT license is in VUE-LICENSE. No CDN, d
 ## Languages
 
 The header offers English, Bahasa Indonesia, Simplified Chinese and Russian. The selected language is saved in localStorage when available. Changing it preserves the current role, form and booking state. Interface text, sample service descriptions, statuses, alerts and currency formatting follow the selection; custom names, addresses and user-written content remain unchanged. All prices remain in IDR. Edit the English-keyed translations in i18n.js to update wording. This language support applies to this static demo; the private Nuxt application is separate.
+
+## Regression checks
+
+Run `node regression.cjs` from this directory. Checks cover Google Maps URL validation, submitted partner details, role isolation, address defaults and drafts, booking validation, assignment and quote transitions, service availability, and reset. These checks exercise the static demo; they do not verify the separate Nuxt backend.

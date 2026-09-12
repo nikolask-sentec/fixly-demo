@@ -79,6 +79,11 @@ const appOptions = {
       registrationStep: 1,
       sampleId: false,
       profiles: {},
+      submittedPartner: null,
+      partnerConsent: false,
+      addressDrafts: {},
+      nextJobId: 2409,
+      nextServiceId: 4,
       accessInstructions: "",
       mapsLink: "",
       registeredArea: "Jimbaran",
@@ -114,6 +119,11 @@ const appOptions = {
     },
   },
   computed: {
+    displayedJobs() {
+      return this.role === "Handyman"
+        ? this.jobs.filter((job) => job.assigned)
+        : this.jobs;
+    },
     visibleServices() {
       return this.services.filter(
         (s) =>
@@ -174,6 +184,7 @@ const appOptions = {
         "bank",
         "bankNumber",
         "sampleId",
+        "partnerConsent",
       ];
       if (this.role !== "Admin")
         this.profiles[this.role] = Object.fromEntries(
@@ -182,7 +193,7 @@ const appOptions = {
       const defaults = appOptions.data();
       Object.assign(
         this,
-        this.profiles[role === "Admin" ? "Handyman" : role] ||
+        (role === "Admin" ? this.submittedPartner : this.profiles[role]) ||
           Object.fromEntries(fields.map((key) => [key, defaults[key]])),
       );
       this.registrationStep = 1;
@@ -205,18 +216,27 @@ const appOptions = {
       this.issue = "";
       this.date = "";
       this.addressMode = "registered";
+      this.addressDrafts = {};
+      this.bookingAddress = null;
+      this.previousAddressMode = null;
       this.chooseAddress();
     },
     chooseAddress() {
+      if (this.bookingAddress && this.previousAddressMode)
+        this.addressDrafts[this.previousAddressMode] = JSON.parse(
+          JSON.stringify(this.bookingAddress),
+        );
+      this.previousAddressMode = this.addressMode;
       this.bookingAddress =
-        this.addressMode === "registered"
+        this.addressDrafts[this.addressMode] ||
+        (this.addressMode === "registered"
           ? {
               street: this.street,
               area: this.registeredArea,
               instructions: this.accessInstructions,
               mapsLink: this.mapsLink,
             }
-          : { street: "", area: this.area, instructions: "", mapsLink: "" };
+          : { street: "", area: this.area, instructions: "", mapsLink: "" });
     },
     book() {
       if (
@@ -231,11 +251,14 @@ const appOptions = {
         this.quantity > 20 ||
         !this.issue.trim() ||
         !this.date ||
+        !Number.isFinite(new Date(this.date).getTime()) ||
         new Date(this.date).getTime() <= Date.now()
-      )
+      ) {
+        this.notify("Check the address, visit time and booking details.");
         return;
+      }
       this.jobs.unshift({
-        id: "FX-" + String(Date.now()).slice(-6),
+        id: "FX-" + this.nextJobId++,
         name: this.selected.name,
         area: this.bookingAddress.area,
         serviceAddress: JSON.parse(JSON.stringify(this.bookingAddress)),
@@ -271,7 +294,7 @@ const appOptions = {
       this.editor = service
         ? { ...service, areas: [...service.areas] }
         : {
-            id: Date.now(),
+            id: this.nextServiceId++,
             name: "",
             group: this.groups[0],
             icon: "⌂",
@@ -283,6 +306,25 @@ const appOptions = {
           };
     },
     saveService() {
+      if (
+        !this.editor ||
+        !this.editor.name.trim() ||
+        !this.editor.description.trim() ||
+        !this.editor.unit.trim() ||
+        !this.groups.includes(this.editor.group) ||
+        !Number.isInteger(this.editor.price) ||
+        this.editor.price < 1 ||
+        this.editor.price > 1000000000 ||
+        !this.editor.areas.length ||
+        this.editor.areas.some((area) => !this.serviceAreas.includes(area))
+      ) {
+        this.notify(
+          "Complete all service details with a valid price and area.",
+        );
+        return;
+      }
+      for (const key of ["name", "description", "unit"])
+        this.editor[key] = this.editor[key].trim();
       const index = this.services.findIndex((s) => s.id === this.editor.id);
       const saved = {
         ...this.editor,
@@ -295,6 +337,13 @@ const appOptions = {
       this.notify("Saved as a demo draft. Publish it to show it to customers.");
     },
     review(decision) {
+      if (this.role !== "Admin" || this.application !== "Pending review")
+        return;
+      if (decision === "Approved" && !this.sampleId) {
+        this.reviewError =
+          "Attach a sample ID and submit the partner application first.";
+        return;
+      }
       if (decision === "Approved" && !this.reviewChecks.every(Boolean)) {
         this.reviewError =
           "Check all three verification items before approval.";
@@ -309,8 +358,40 @@ const appOptions = {
       this.notify("Application updated. See the Handyman view for the result.");
     },
     move(job, status) {
+      const allowed = {
+        Admin: { Requested: ["Assigned"] },
+        Customer: {
+          Requested: ["Cancelled"],
+          Assigned: ["Cancelled"],
+          "Quote ready": ["In progress"],
+        },
+        Handyman: {
+          Assigned: ["On the way"],
+          "On the way": ["Diagnosing"],
+          Diagnosing: ["Quote ready"],
+          "In progress": ["Completed"],
+        },
+      };
+      if (
+        !this.jobs.includes(job) ||
+        !allowed[this.role]?.[job.status]?.includes(status)
+      )
+        return;
+      if ((this.role === "Handyman" || status === "Assigned") && !this.approved)
+        return;
+      if (this.role === "Handyman" && !job.assigned) return;
+      if (status === "Quote ready") {
+        if (
+          !Number.isInteger(job.quoteInput) ||
+          job.quoteInput < 1 ||
+          job.quoteInput > 1000000000
+        )
+          return;
+        job.quote = job.quoteInput;
+      }
+      if (status === "Assigned") job.assigned = true;
+      if (status === "Diagnosing") job.quoteInput = job.price * job.quantity;
       job.status = status;
-      if (status === "Quote ready") job.quote = this.quoteInput;
       this.notify("Demo job updated: " + status);
     },
     pickPin(event) {
@@ -321,11 +402,48 @@ const appOptions = {
       };
     },
     submitRegistration() {
+      if (
+        !this.fullName.trim() ||
+        !this.street.trim() ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email) ||
+        !/^\+?[0-9 ()-]{8,22}$/.test(this.phone) ||
+        !validMapsLink(this.mapsLink)
+      ) {
+        this.notify("Enter a name, valid email, phone number and address.");
+        return;
+      }
+      if (
+        this.role === "Handyman" &&
+        this.registrationStep >= 2 &&
+        (!this.sampleId ||
+          !this.partnerConsent ||
+          !/^[0-9]+$/.test(this.bankNumber))
+      ) {
+        this.notify(
+          "Attach a sample ID, enter bank details and confirm partner status.",
+        );
+        return;
+      }
       if (this.registrationStep < 3) {
         this.registrationStep++;
         return;
       }
       if (this.role === "Handyman") {
+        this.submittedPartner = Object.fromEntries(
+          [
+            "fullName",
+            "email",
+            "phone",
+            "street",
+            "accessInstructions",
+            "mapsLink",
+            "registeredArea",
+            "bank",
+            "bankNumber",
+            "sampleId",
+            "partnerConsent",
+          ].map((key) => [key, this[key]]),
+        );
         this.reason = "";
         this.reviewError = "";
         this.application = "Pending review";
@@ -356,13 +474,13 @@ const appOptions = {
 
   <template v-if="role==='Handyman'&&page==='Overview'"><section class="hero partner-hero"><div><span class="tag">{{ t("YOUR SKILLS. YOUR NEXT OPPORTUNITY.") }}</span><h2>{{ t(approved?'Ready to make someone’s day?':'A quick review, then you’re ready.') }}</h2><p>{{ t(approved?'Your assigned jobs and next steps are all here.':'Your application needs manual approval before you can receive household service jobs.') }}</p><button class="primary" @click="page=approved?'My jobs':'Registration'">{{ t(approved?'View my jobs ↗':'Preview registration ↗') }}</button></div><div class="partner-mark" aria-hidden="true">✦</div></section><div class="stats"><div class="card"><small>{{ t("Application") }}</small><strong class="status-text">{{ t(application) }}</strong><span>{{ t("Independent partner") }}</span></div><div class="card"><small>{{ t("Assigned jobs") }}</small><strong>{{ t(approved?jobs.filter(j=>!['Requested','Cancelled','Completed'].includes(j.status)).length:0) }}</strong><span>{{ t("Verified access required") }}</span></div><div class="card"><small>{{ t("Completed") }}</small><strong>{{ t(jobs.filter(j=>j.status==='Completed').length) }}</strong><span>{{ t("In this demo session") }}</span></div></div></template>
 
-  <template v-if="page==='My bookings'||page==='Jobs'||page==='My jobs'||(role==='Admin'&&page==='Overview')"><div v-if="role==='Handyman'&&!approved" class="card empty"><span class="service-icon">◎</span><h2>{{ t("Your application is") }} {{ t(application.toLowerCase()) }}.</h2><p>{{ t(reason||'An administrator must approve your details before you can receive jobs.') }}</p><p class="hint">{{ t("For this walkthrough, switch to Admin → Partner approvals.") }}</p></div><template v-else><article class="card job" v-for="j in jobs.filter(j=>role!=='Handyman'||j.status!=='Requested')" :key="j.id"><div class="job-header"><span class="job-id">{{ t(j.id) }}</span><span class="pill">{{ t(j.status) }}</span></div><h3>{{ t(j.name) }}</h3><p>{{ t(j.issue) }}</p><div class="job-details"><span>◷ {{ t(j.date) }}</span><span>⌖ {{ t(j.area) }}<span v-if="j.serviceAddress"><br>{{ j.serviceAddress.street }}<br>{{ j.serviceAddress.instructions }}<br><a v-if="j.serviceAddress.mapsLink && validMapsLink(j.serviceAddress.mapsLink)" :href="j.serviceAddress.mapsLink" target="_blank" rel="noopener noreferrer">{{ t("Open in Google Maps") }}</a></span></span><span>{{ t(money(j.price)) }} × {{ t(j.quantity) }}</span></div><p v-if="j.quote"><b>{{ t("Total work quote:") }} {{ t(money(j.quote)) }}</b></p><div class="job-actions"><button v-if="role==='Admin'&&j.status==='Requested'" class="primary" :disabled="!approved" @click="move(j,'Assigned')">{{ t("Assign to Andi") }}</button><small v-if="role==='Admin'&&!approved">{{ t("Approve the sample partner first.") }}</small><template v-if="role==='Handyman'"><button v-if="j.status==='Assigned'" class="primary" @click="move(j,'On the way')">{{ t("Start travelling") }}</button><button v-if="j.status==='On the way'" class="primary" @click="move(j,'Diagnosing')">{{ t("I’ve arrived") }}</button><form v-if="j.status==='Diagnosing'" @submit.prevent="move(j,'Quote ready')"><label>{{ t("Total quote (IDR)") }}<input type="number" min="1" max="1000000000" v-model.number="quoteInput" required></label><button class="primary">{{ t("Send quote") }}</button></form><button v-if="j.status==='In progress'" class="primary" @click="move(j,'Completed')">{{ t("Complete work") }}</button></template><template v-if="role==='Customer'"><button v-if="j.status==='Quote ready'" class="primary" @click="move(j,'In progress')">{{ t("Approve quote") }}</button><button v-if="['Requested','Assigned'].includes(j.status)" class="secondary" @click="move(j,'Cancelled')">{{ t("Cancel request") }}</button></template><small v-if="j.status==='Completed'">{{ t("Payment integration is planned; no payment is collected.") }}</small></div></article><p v-if="!jobs.length" class="card empty">{{ t("No bookings yet. Explore the services to create a sample request.") }}</p></template></template>
+  <template v-if="page==='My bookings'||page==='Jobs'||page==='My jobs'||(role==='Admin'&&page==='Overview')"><div v-if="role==='Handyman'&&!approved" class="card empty"><span class="service-icon">◎</span><h2>{{ t("Your application is") }} {{ t(application.toLowerCase()) }}.</h2><p>{{ t(reason||'An administrator must approve your details before you can receive jobs.') }}</p><p class="hint">{{ t("For this walkthrough, switch to Admin → Partner approvals.") }}</p></div><template v-else><article class="card job" v-for="j in displayedJobs" :key="j.id"><div class="job-header"><span class="job-id">{{ t(j.id) }}</span><span class="pill">{{ t(j.status) }}</span></div><h3>{{ t(j.name) }}</h3><p>{{ t(j.issue) }}</p><div class="job-details"><span>◷ {{ t(j.date) }}</span><span>⌖ {{ t(j.area) }}<span v-if="j.serviceAddress"><br>{{ j.serviceAddress.street }}<br>{{ j.serviceAddress.instructions }}<br><a v-if="j.serviceAddress.mapsLink && validMapsLink(j.serviceAddress.mapsLink)" :href="j.serviceAddress.mapsLink" target="_blank" rel="noopener noreferrer">{{ t("Open in Google Maps") }}</a></span></span><span>{{ t(money(j.price)) }} × {{ t(j.quantity) }}</span></div><p v-if="j.quote"><b>{{ t("Total work quote:") }} {{ t(money(j.quote)) }}</b></p><div class="job-actions"><button v-if="role==='Admin'&&j.status==='Requested'" class="primary" :disabled="!approved" @click="move(j,'Assigned')">{{ t("Assign partner") }}</button><small v-if="role==='Admin'&&!approved">{{ t("Approve the sample partner first.") }}</small><template v-if="role==='Handyman'"><button v-if="j.status==='Assigned'" class="primary" @click="move(j,'On the way')">{{ t("Start travelling") }}</button><button v-if="j.status==='On the way'" class="primary" @click="move(j,'Diagnosing')">{{ t("I’ve arrived") }}</button><form v-if="j.status==='Diagnosing'" @submit.prevent="move(j,'Quote ready')"><label>{{ t("Total quote (IDR)") }}<input type="number" min="1" max="1000000000" v-model.number="j.quoteInput" required></label><button class="primary">{{ t("Send quote") }}</button></form><button v-if="j.status==='In progress'" class="primary" @click="move(j,'Completed')">{{ t("Complete work") }}</button></template><template v-if="role==='Customer'"><button v-if="j.status==='Quote ready'" class="primary" @click="move(j,'In progress')">{{ t("Approve quote") }}</button><button v-if="['Requested','Assigned'].includes(j.status)" class="secondary" @click="move(j,'Cancelled')">{{ t("Cancel request") }}</button></template><small v-if="j.status==='Completed'">{{ t("Payment integration is planned; no payment is collected.") }}</small></div></article><p v-if="!displayedJobs.length" class="card empty">{{ t("No bookings yet. Explore the services to create a sample request.") }}</p></template></template>
 
-  <template v-if="role==='Admin'&&page==='Service catalog'"><div class="catalog-toolbar"><form @submit.prevent="addGroup" class="inline"><input v-model="newGroup" :placeholder="t(&quot;New job group&quot;)" :aria-label="t(&quot;New job group&quot;)" required maxlength="60"><button class="secondary">{{ t("Add group") }}</button></form><button class="primary" @click="editService(null)">{{ t("+ Create job item") }}</button></div><div class="card table-wrap"><table><thead><tr><th>{{ t("Service / job group") }}</th><th>{{ t("Unit price") }}</th><th>{{ t("Availability by area") }}</th><th>{{ t("Status") }}</th><th>{{ t("Actions") }}</th></tr></thead><tbody><tr v-for="s in services"><td><b>{{ t(s.name) }}</b><small>{{ t(s.group) }}</small></td><td>{{ t(money(s.price)) }}<small>/ {{ t(s.unit) }}</small></td><td><label v-for="a in serviceAreas" class="check"><input type="checkbox" :value="a" v-model="s.areas">{{ t(a) }}</label></td><td><span class="pill">{{ t(s.published?'Published':'Draft') }}</span></td><td><button class="text-button" @click="editService(s)">{{ t("Edit") }}</button><button class="text-button" :disabled="!s.areas.length" @click="s.published=!s.published">{{ t(s.published?'Unpublish':'Publish') }}</button></td></tr></tbody></table></div><p class="hint">{{ t("Area switches immediately change the customer demo. Editing a demo item saves it as a draft until you publish it again. Existing bookings keep their original unit price.") }}</p></template>
+  <template v-if="role==='Admin'&&page==='Service catalog'"><div class="catalog-toolbar"><form @submit.prevent="addGroup" class="inline"><input v-model="newGroup" :placeholder="t(&quot;New job group&quot;)" :aria-label="t(&quot;New job group&quot;)" required maxlength="60"><button class="secondary">{{ t("Add group") }}</button></form><button class="primary" @click="editService(null)">{{ t("+ Create job item") }}</button></div><div class="card table-wrap"><table><thead><tr><th>{{ t("Service / job group") }}</th><th>{{ t("Unit price") }}</th><th>{{ t("Availability by area") }}</th><th>{{ t("Status") }}</th><th>{{ t("Actions") }}</th></tr></thead><tbody><tr v-for="s in services"><td><b>{{ t(s.name) }}</b><small>{{ t(s.group) }}</small></td><td>{{ t(money(s.price)) }}<small>/ {{ t(s.unit) }}</small></td><td><label v-for="a in serviceAreas" class="check"><input type="checkbox" :value="a" v-model="s.areas">{{ t(a) }}</label></td><td><span class="pill">{{ t(s.published?'Published':'Draft') }}</span></td><td><button class="text-button" @click="editService(s)">{{ t("Edit") }}</button><button class="text-button" :disabled="!s.published&&!s.areas.length" @click="s.published=!s.published">{{ t(s.published?'Unpublish':'Publish') }}</button></td></tr></tbody></table></div><p class="hint">{{ t("Area switches immediately change the customer demo. Editing a demo item saves it as a draft until you publish it again. Existing bookings keep their original unit price.") }}</p></template>
 
-  <template v-if="role==='Admin'&&page==='Partner approvals'"><div class="review-grid"><section class="card"><div class="job-header"><span class="eyebrow">{{ t("PARTNER APPLICATION") }}</span><span class="pill">{{ t(application) }}</span></div><h2>{{ t(fullName) }}</h2><p>{{ t("Independent handyman · Jimbaran") }}</p><dl><dt>{{ t("Email") }}</dt><dd>{{ t(email) }}</dd><dt>{{ t("Phone") }}</dt><dd>{{ t(phone) }}</dd><dt>{{ t("Home base") }}</dt><dd>{{ t(street) }}<br><a v-if="mapsLink && validMapsLink(mapsLink)" :href="mapsLink" target="_blank" rel="noopener noreferrer">{{t("Open in Google Maps")}}</a></dd><dt>{{ t("Bank") }}</dt><dd>{{ t(bank) }} · {{ t(bankNumber) }}</dd></dl><div class="sample-id"><b>{{ t("SAMPLE ID — NOT VALID") }}</b><div class="id-content"><span>◎</span><div>{{ t("DEMO PARTNER") }}<br><small>{{ t("Illustration for design review only") }}<br>{{ t("No actual identity document") }}</small></div></div></div></section><section class="card"><h2>{{ t("Manual verification") }}</h2><p>{{ t("Confirm the required details before approving a partner.") }}</p><label class="check review-check" v-for="(label,i) in ['ID image is readable and matches the applicant','Email and phone details have been checked','Bank details have been checked']"><input type="checkbox" v-model="reviewChecks[i]">{{ t(label) }}</label><label>{{ t("Review notes") }}<textarea v-model="reason" :placeholder="t(&quot;Explain any changes needed&quot;)" maxlength="500"></textarea></label><p v-if="reviewError" class="error" role="alert">{{ t(reviewError) }}</p><div class="stack" v-if="application==='Pending review'"><button class="primary" @click="review('Approved')">{{ t("Approve partner") }}</button><button class="secondary" @click="review('Changes requested')">{{ t("Request changes") }}</button><button class="text-button" @click="review('Rejected')">{{ t("Reject application") }}</button></div><p v-else class="notice">{{ t("Review saved:") }} {{ t(application) }}.</p></section></div></template>
+  <template v-if="role==='Admin'&&page==='Partner approvals'"><div class="review-grid"><section class="card"><div class="job-header"><span class="eyebrow">{{ t("PARTNER APPLICATION") }}</span><span class="pill">{{ t(application) }}</span></div><h2>{{ t(fullName) }}</h2><p>{{ t("Independent partner") }} · {{ registeredArea }}</p><dl><dt>{{ t("Email") }}</dt><dd>{{ t(email) }}</dd><dt>{{ t("Phone") }}</dt><dd>{{ t(phone) }}</dd><dt>{{ t("Home base") }}</dt><dd>{{ t(street) }}<br><a v-if="mapsLink && validMapsLink(mapsLink)" :href="mapsLink" target="_blank" rel="noopener noreferrer">{{t("Open in Google Maps")}}</a></dd><dt>{{ t("Bank") }}</dt><dd>{{ t(bank) }} · {{ t(bankNumber) }}</dd></dl><p v-if="!sampleId" class="notice">{{t("No sample ID attached")}}</p><div v-else class="sample-id"><b>{{ t("SAMPLE ID — NOT VALID") }}</b><div class="id-content"><span>◎</span><div>{{ t("DEMO PARTNER") }}<br><small>{{ t("Illustration for design review only") }}<br>{{ t("No actual identity document") }}</small></div></div></div></section><section class="card"><h2>{{ t("Manual verification") }}</h2><p>{{ t("Confirm the required details before approving a partner.") }}</p><label class="check review-check" v-for="(label,i) in ['ID image is readable and matches the applicant','Email and phone details have been checked','Bank details have been checked']"><input type="checkbox" v-model="reviewChecks[i]">{{ t(label) }}</label><label>{{ t("Review notes") }}<textarea v-model="reason" :placeholder="t(&quot;Explain any changes needed&quot;)" maxlength="500"></textarea></label><p v-if="reviewError" class="error" role="alert">{{ t(reviewError) }}</p><div class="stack" v-if="application==='Pending review'"><button class="primary" @click="review('Approved')">{{ t("Approve partner") }}</button><button class="secondary" @click="review('Changes requested')">{{ t("Request changes") }}</button><button class="text-button" @click="review('Rejected')">{{ t("Reject application") }}</button></div><p v-else class="notice">{{ t("Review saved:") }} {{ t(application) }}.</p></section></div></template>
 
-  <template v-if="page==='Registration'"><div class="registration-layout"><section><span class="eyebrow">{{ t(role==='Handyman'?'BECOME AN INDEPENDENT PARTNER':'WELCOME HOME') }}</span><h2>{{ t(role==='Handyman'?'Good work starts here.':'Let’s get your home ready.') }}</h2><p>{{ t("Try the registration flow using the sample details provided.") }}</p><ol class="steps"><li :class="{active:registrationStep===1}">{{ t("Contact details") }}</li><li :class="{active:registrationStep===2}">{{ t(role==='Handyman'?'Identity & bank account':'Home location') }}</li><li :class="{active:registrationStep===3}">{{ t("Review & submit") }}</li></ol></section><form class="card" @submit.prevent="submitRegistration"><h2>{{ t(['Your details',role==='Handyman'?'Identity & bank account':'Pinpoint your entrance','Looks good?'][registrationStep-1]) }}</h2><template v-if="registrationStep===1"><button type="button" class="secondary full" @click="notify('Google sign-in preview only. No Google account is connected.')">{{ t("G   Continue with Google") }}</button><label>{{ t("Full name") }}<input v-model="fullName" required maxlength="100"></label><label>{{ t("Email") }}<input v-model="email" type="email" required></label><label>{{ t("Phone number") }}<input v-model="phone" type="tel" required></label><label>{{ t("Home address") }}<input v-model="street" required></label><template v-if="role==='Handyman'"><label>{{t("⌖ Service area")}}<select v-model="registeredArea"><option v-for="a in serviceAreas" :value="a">{{a}}</option></select></label><location-picker v-model="mapsLink" :t="t"></location-picker></template></template><template v-if="registrationStep===2&&role==='Handyman'"><div class="upload-placeholder"><span>▧</span><h3>{{ t("ID card photo") }}</h3><p>{{ t("Use a synthetic sample for this walkthrough.") }}</p><button type="button" class="secondary" @click="sampleId=true">{{ t(sampleId?'✓ Sample ID attached':'Attach sample ID') }}</button></div><label>{{ t("Bank name") }}<select v-model="bank"><option>BCA</option><option>Mandiri</option><option>BRI</option><option>BNI</option></select></label><label>{{ t("Bank account number") }}<input v-model="bankNumber" inputmode="numeric" pattern="[0-9]+" required></label><label class="check"><input type="checkbox" required>{{ t("I am an independent partner, not an employee.") }}</label></template><template v-if="registrationStep===2&&role!=='Handyman'"><label>{{ t("Address") }}<input v-model="street" required></label><label>{{ t('⌖ Service area') }}<select v-model="registeredArea"><option v-for="a in serviceAreas" :value="a">{{a}}</option></select></label><location-picker v-model="mapsLink" :t="t"></location-picker><label>{{ t("Landmark / access instructions") }}<textarea v-model="accessInstructions" :placeholder="t(&quot;Near the corner, blue gate…&quot;)"></textarea></label></template><template v-if="registrationStep===3"><p><b>{{ t(fullName) }}</b><br>{{ t(email) }}<br>{{ t(phone) }}<br>{{ t(street) }}<br><a v-if="mapsLink && validMapsLink(mapsLink)" :href="mapsLink" target="_blank" rel="noopener noreferrer">{{t("Open in Google Maps")}}</a></p><p v-if="role==='Handyman'">{{ t(bank) }} · {{ t(bankNumber) }}<br>{{ t(sampleId?'Sample ID attached':'No sample ID attached') }}</p><p class="hint">{{ t(role==='Handyman'?'An administrator must manually approve the application before you can receive jobs.':'Payment setup is deferred. No card details are collected.') }}</p></template><div class="actions"><button type="button" v-if="registrationStep>1" class="secondary" @click="registrationStep--">{{ t("Back") }}</button><button class="primary" :disabled="role==='Handyman'&&registrationStep===2&&!sampleId">{{ t(registrationStep===3?'Submit demo':'Continue →') }}</button></div></form></div></template>
+  <template v-if="page==='Registration'"><div class="registration-layout"><section><span class="eyebrow">{{ t(role==='Handyman'?'BECOME AN INDEPENDENT PARTNER':'WELCOME HOME') }}</span><h2>{{ t(role==='Handyman'?'Good work starts here.':'Let’s get your home ready.') }}</h2><p>{{ t("Try the registration flow using the sample details provided.") }}</p><ol class="steps"><li :class="{active:registrationStep===1}">{{ t("Contact details") }}</li><li :class="{active:registrationStep===2}">{{ t(role==='Handyman'?'Identity & bank account':'Home location') }}</li><li :class="{active:registrationStep===3}">{{ t("Review & submit") }}</li></ol></section><form class="card" @submit.prevent="submitRegistration"><h2>{{ t(['Your details',role==='Handyman'?'Identity & bank account':'Pinpoint your entrance','Looks good?'][registrationStep-1]) }}</h2><template v-if="registrationStep===1"><button type="button" class="secondary full" @click="notify('Google sign-in preview only. No Google account is connected.')">{{ t("G   Continue with Google") }}</button><label>{{ t("Full name") }}<input v-model="fullName" required maxlength="100"></label><label>{{ t("Email") }}<input v-model="email" type="email" required></label><label>{{ t("Phone number") }}<input v-model="phone" type="tel" required></label><label>{{ t("Home address") }}<input v-model="street" required></label><template v-if="role==='Handyman'"><label>{{t("⌖ Service area")}}<select v-model="registeredArea"><option v-for="a in serviceAreas" :value="a">{{a}}</option></select></label><location-picker v-model="mapsLink" :t="t"></location-picker></template></template><template v-if="registrationStep===2&&role==='Handyman'"><div class="upload-placeholder"><span>▧</span><h3>{{ t("ID card photo") }}</h3><p>{{ t("Use a synthetic sample for this walkthrough.") }}</p><button type="button" class="secondary" @click="sampleId=true">{{ t(sampleId?'✓ Sample ID attached':'Attach sample ID') }}</button></div><label>{{ t("Bank name") }}<select v-model="bank"><option>BCA</option><option>Mandiri</option><option>BRI</option><option>BNI</option></select></label><label>{{ t("Bank account number") }}<input v-model="bankNumber" inputmode="numeric" pattern="[0-9]+" required></label><label class="check"><input type="checkbox" v-model="partnerConsent" required>{{ t("I am an independent partner, not an employee.") }}</label></template><template v-if="registrationStep===2&&role!=='Handyman'"><label>{{ t("Address") }}<input v-model="street" required></label><label>{{ t('⌖ Service area') }}<select v-model="registeredArea"><option v-for="a in serviceAreas" :value="a">{{a}}</option></select></label><location-picker v-model="mapsLink" :t="t"></location-picker><label>{{ t("Landmark / access instructions") }}<textarea v-model="accessInstructions" :placeholder="t(&quot;Near the corner, blue gate…&quot;)"></textarea></label></template><template v-if="registrationStep===3"><p><b>{{ t(fullName) }}</b><br>{{ t(email) }}<br>{{ t(phone) }}<br>{{ t(street) }}<br><a v-if="mapsLink && validMapsLink(mapsLink)" :href="mapsLink" target="_blank" rel="noopener noreferrer">{{t("Open in Google Maps")}}</a></p><p v-if="role==='Handyman'">{{ t(bank) }} · {{ t(bankNumber) }}<br>{{ t(sampleId?'Sample ID attached':'No sample ID attached') }}</p><p class="hint">{{ t(role==='Handyman'?'An administrator must manually approve the application before you can receive jobs.':'Payment setup is deferred. No card details are collected.') }}</p></template><div class="actions"><button type="button" v-if="registrationStep>1" class="secondary" @click="registrationStep--">{{ t("Back") }}</button><button class="primary" :disabled="role==='Handyman'&&registrationStep===2&&!sampleId">{{ t(registrationStep===3?'Submit demo':'Continue →') }}</button></div></form></div></template>
   <footer>{{ t("Designed for better days at home.") }}<span>Fixly · Indonesia</span></footer></main></div>
 
   <div v-if="selected" class="modal-backdrop" @click.self="selected=null"><section class="modal card" role="dialog" aria-modal="true" aria-labelledby="booking-title"><button class="close" :aria-label="t(&quot;Close booking&quot;)" @click="selected=null">×</button><span class="eyebrow">{{ t("A LITTLE HELP IS ON THE WAY") }}</span><h2 id="booking-title">{{ t(selected.name) }}</h2><p>{{ t(selected.description) }}</p><form @submit.prevent="book"><fieldset><legend>{{ t('Service address') }}</legend><label class="check"><input type="radio" value="registered" v-model="addressMode" @change="chooseAddress">{{ t('Use my registered address') }}</label><label class="check"><input type="radio" value="another" v-model="addressMode" @change="chooseAddress">{{ t('Use another address') }}</label><label>{{ t('Address') }}<input v-model="bookingAddress.street" required :readonly="addressMode==='registered'"></label><label>{{ t('⌖ Service area') }}<select v-model="bookingAddress.area" :disabled="addressMode==='registered'"><option v-for="a in serviceAreas" :value="a">{{a}}</option></select></label><p v-if="!selected.areas.includes(bookingAddress.area)" class="error">{{t('This service is unavailable at this address.')}}</p><label>{{t('Landmark / access instructions')}}<textarea v-model="bookingAddress.instructions"></textarea></label><location-picker :key="addressMode" v-model="bookingAddress.mapsLink" :t="t"></location-picker></fieldset><label>{{ t("Quantity") }}<input v-model.number="quantity" type="number" min="1" max="20" required></label><label>{{ t("Preferred visit") }}<input v-model="date" @input="validateVisit" type="datetime-local" required></label><label>{{ t("Tell us what’s happening") }}<textarea v-model="issue" required maxlength="500"></textarea></label><div class="estimate"><span>{{ t("Service estimate") }}</span><b>{{ t(money(selected.price*quantity)) }}</b></div><p class="hint">{{ t("Additional work is quoted separately and needs your approval.") }}</p><button class="primary full" :disabled="!selected.areas.includes(bookingAddress.area)">{{ t("Create demo booking") }}</button></form></section></div>

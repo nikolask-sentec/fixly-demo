@@ -1,6 +1,12 @@
 // English keys keep the demo's internal workflow values stable.
 // Columns: Bahasa Indonesia | Simplified Chinese | Russian.
 const rows = `
+Check the address, visit time and booking details.|Periksa alamat, waktu kunjungan, dan rincian pesanan.|请检查地址、上门时间和订单详情。|Проверьте адрес, время визита и данные заказа.
+Complete all service details with a valid price and area.|Lengkapi rincian layanan dengan harga dan area yang valid.|请填写完整的服务详情及有效价格和区域。|Заполните сведения об услуге, укажите допустимую цену и район.
+Attach a sample ID and submit the partner application first.|Lampirkan KTP contoh dan kirim pendaftaran mitra terlebih dahulu.|请先附上示例身份证并提交合作伙伴申请。|Сначала прикрепите образец удостоверения и отправьте заявку мастера.
+Enter a name, valid email, phone number and address.|Masukkan nama, email valid, nomor telepon, dan alamat.|请输入姓名、有效邮箱、电话号码和地址。|Введите имя, действительную почту, телефон и адрес.
+Attach a sample ID, enter bank details and confirm partner status.|Lampirkan KTP contoh, isi data bank, dan konfirmasi status mitra.|请附上示例身份证、填写银行资料并确认合作伙伴身份。|Прикрепите образец удостоверения, заполните банковские данные и подтвердите статус партнёра.
+Assign partner|Tugaskan mitra|指派合作伙伴|Назначить мастера
 Google Maps location link (optional)|Tautan lokasi Google Maps (opsional)|Google 地图位置链接（可选）|Ссылка на Google Карты (необязательно)
 Paste a valid Google Maps sharing link.|Tempel tautan berbagi Google Maps yang valid.|请粘贴有效的 Google 地图分享链接。|Вставьте действительную ссылку Google Карт.
 In Google Maps, select your location, tap Share, then Copy link and paste it here.|Di Google Maps, pilih lokasi, ketuk Bagikan, lalu Salin tautan dan tempel di sini.|在 Google 地图中选择位置，点击分享，复制链接并粘贴到此处。|Выберите место в Google Картах, нажмите «Поделиться», скопируйте ссылку и вставьте её сюда.
