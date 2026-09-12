@@ -9,6 +9,8 @@ let code = fs
     "globalThis.options=appOptions;",
   );
 const ctx = {
+  LocationPicker: {},
+  validMapsLink: () => true,
   savedLanguage: () => "en",
   translate: (x) => x,
   locales: { en: "en-US" },
@@ -49,6 +51,16 @@ a.addGroup();
 assert.equal(a.groups.length, 3);
 a.selected = a.services[0];
 a.area = "Benoa";
+a.openBooking(a.services[0]);
+assert.equal(a.bookingAddress.street, a.street);
+a.addressMode = "another";
+a.chooseAddress();
+a.bookingAddress = {
+  street: "Other house",
+  area: "Benoa",
+  instructions: "Side gate",
+  location: { x: 20, y: 30 },
+};
 a.date = "2000-01-01T10:00";
 a.issue = "AC issue";
 let n = a.jobs.length;
@@ -58,6 +70,10 @@ a.date = "2099-01-01T10:00";
 a.book();
 assert.equal(a.jobs[0].area, "Benoa");
 assert.equal(a.jobs[0].price, 75000);
+assert.equal(a.jobs[0].serviceAddress.street, "Other house");
+assert.notEqual(a.street, "Other house");
+a.bookingAddress.street = "changed";
+assert.equal(a.jobs[0].serviceAddress.street, "Other house");
 a.role = "Handyman";
 a.registrationStep = 3;
 a.reason = "old rejection";

@@ -1,6 +1,15 @@
 // English keys keep the demo's internal workflow values stable.
 // Columns: Bahasa Indonesia | Simplified Chinese | Russian.
 const rows = `
+Google Maps location link (optional)|Tautan lokasi Google Maps (opsional)|Google 地图位置链接（可选）|Ссылка на Google Карты (необязательно)
+Paste a valid Google Maps sharing link.|Tempel tautan berbagi Google Maps yang valid.|请粘贴有效的 Google 地图分享链接。|Вставьте действительную ссылку Google Карт.
+In Google Maps, select your location, tap Share, then Copy link and paste it here.|Di Google Maps, pilih lokasi, ketuk Bagikan, lalu Salin tautan dan tempel di sini.|在 Google 地图中选择位置，点击分享，复制链接并粘贴到此处。|Выберите место в Google Картах, нажмите «Поделиться», скопируйте ссылку и вставьте её сюда.
+Open in Google Maps|Buka di Google Maps|在 Google 地图中打开|Открыть в Google Картах
+Service address|Alamat layanan|服务地址|Адрес услуги
+Use my registered address|Gunakan alamat terdaftar saya|使用我的注册地址|Использовать адрес профиля
+Use another address|Gunakan alamat lain|使用其他地址|Использовать другой адрес
+This service is unavailable at this address.|Layanan ini tidak tersedia di alamat ini.|此地址暂不提供此服务。|Эта услуга недоступна по этому адресу.
+Sample pin saved|Pin contoh tersimpan|示例位置已保存|Пример отметки сохранён
 Choose a future visit time.|Pilih waktu kunjungan mendatang.|请选择未来的上门时间。|Выберите будущее время визита.
 Language|Bahasa|语言|Язык
 Customer|Pelanggan|客户|Клиент
