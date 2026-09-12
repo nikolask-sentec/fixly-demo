@@ -1194,3 +1194,65 @@ footer {
     font-size: 12px;
   }
 }
+.language-picker {
+  margin: 0;
+  color: #6b7b88;
+  font-size: 10px;
+  min-width: 140px;
+}
+.language-picker select {
+  margin: 2px 0 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  background: #f7f9fa;
+}
+header {
+  height: auto;
+  min-height: 87px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.role-switch button {
+  white-space: normal;
+}
+html[lang="ru"] .role-switch button {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+html[lang="ru"] .hero h2 {
+  font-size: clamp(25px, 2.7vw, 38px);
+}
+@media (max-width: 760px) {
+  header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .language-picker {
+    min-width: 130px;
+    margin-left: auto;
+  }
+  .role-switch {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: center;
+  }
+  .role-switch button {
+    flex: 1;
+    padding: 8px;
+  }
+  .demo-bar {
+    flex-wrap: wrap;
+  }
+  .page-top {
+    flex-wrap: wrap;
+  }
+  .service-bottom {
+    gap: 8px;
+  }
+  .job-actions {
+    align-items: stretch;
+  }
+  .stats strong.status-text {
+    overflow-wrap: anywhere;
+  }
+}

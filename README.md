@@ -19,3 +19,7 @@ In Settings → Pages, select Deploy from a branch, branch main, folder / (root)
 To preview locally, serve this directory with any static HTTP server; JavaScript modules require HTTP rather than opening index.html as a file.
 
 Vue 3 is bundled locally in vue.js; its MIT license is in VUE-LICENSE. No CDN, database or external service credentials are used. app.js and style.css contain the editable mockup code.
+
+## Languages
+
+The header offers English, Bahasa Indonesia, Simplified Chinese and Russian. The selected language is saved in localStorage when available. Changing it preserves the current role, form and booking state. Interface text, sample service descriptions, statuses, alerts and currency formatting follow the selection; custom names, addresses and user-written content remain unchanged. All prices remain in IDR. Edit the English-keyed translations in i18n.js to update wording. This language support applies to this static demo; the private Nuxt application is separate.
