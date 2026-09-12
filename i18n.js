@@ -102,7 +102,7 @@ An administrator must approve your details before you can receive jobs.|Admin ha
 For this walkthrough, switch to Admin → Partner approvals.|Untuk mencoba, pilih Admin → Verifikasi mitra.|体验此流程，请切换至管理员 → 合作伙伴审核。|Для демонстрации перейдите в Администратор → Проверка мастеров.
 Tomorrow, 09:00|Besok, 09.00|明天 09:00|Завтра, 09:00
 The living room AC is not cooling well.|AC ruang tamu kurang dingin.|客厅空调制冷效果不好。|Кондиционер в гостиной плохо охлаждает.
-⌖ Sample home · Makassar|⌖ Rumah contoh · Makassar|⌖ 示例住宅 · Makassar|⌖ Пример дома · Макассар
+⌖ Sample home · Jimbaran|⌖ Rumah contoh · Jimbaran|⌖ 示例住宅 · Jimbaran|⌖ Пример дома · Джимбаран
 Total work quote:|Total penawaran:|施工总报价：|Общая смета:
 Assign to Andi|Tugaskan ke Andi|分配给 Andi|Назначить Andi
 Approve the sample partner first.|Setujui mitra contoh terlebih dahulu.|请先批准示例合作伙伴。|Сначала одобрите демонстрационного мастера.
@@ -130,7 +130,7 @@ Unpublish|Batalkan publikasi|取消发布|Снять с публикации
 Publish|Terbitkan|发布|Опубликовать
 Area switches immediately change the customer demo. Editing a demo item saves it as a draft until you publish it again. Existing bookings keep their original unit price.|Perubahan area langsung berlaku di demo pelanggan. Item yang diubah menjadi draf hingga diterbitkan kembali. Pesanan lama tetap memakai harga awal.|区域开关会立即更新客户演示。编辑后项目将保存为草稿，需重新发布。已有预约保留原单价。|Переключатели зон сразу меняют демо клиента. После редактирования услуга сохраняется как черновик до повторной публикации. Цена существующих заявок не меняется.
 PARTNER APPLICATION|PENDAFTARAN MITRA|合作伙伴申请|ЗАЯВКА МАСТЕРА
-Independent handyman · Makassar|Teknisi mandiri · Makassar|独立维修师傅 · Makassar|Независимый мастер · Макассар
+Independent handyman · Jimbaran|Teknisi mandiri · Jimbaran|独立维修师傅 · Jimbaran|Независимый мастер · Джимбаран
 Email|Email|电子邮箱|Электронная почта
 Phone|Telepon|电话|Телефон
 Home base|Alamat utama|常驻地址|Основной адрес
